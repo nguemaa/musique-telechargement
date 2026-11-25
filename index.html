@@ -281,6 +281,15 @@
       background: var(--accent-hover);
     }
 
+    .btn-preview.is-disabled,
+    .btn-download.is-disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
     .social-bar {
       margin-top: 1rem;
       padding-top: 0.9rem;
@@ -517,15 +526,76 @@
       }
     ];
 
+    // =====================================================================
+    // LIENS D'ÉCOUTE ET DE TÉLÉCHARGEMENT
+    // Colle ici les liens de chaque son, repéré par son code (01, 02, 03...).
+    //   ecoute         : lien de l'extrait joué par le bouton « Écouter »
+    //   telechargement : lien du fichier pour le bouton « Télécharger »
+    // Laisse "" tant que le lien n'est pas prêt : le bouton s'affiche alors
+    // « Bientôt dispo » au lieu d'un lien cassé.
+    // Les liens Google Drive (…/file/d/ID/view) et Dropbox (?dl=0) sont
+    // convertis automatiquement en liens directs.
+    // =====================================================================
+    const LIENS = {
+      "01": { ecoute: "", telechargement: "" },
+      "02": { ecoute: "", telechargement: "" },
+      "03": { ecoute: "", telechargement: "" }
+    };
+
+    // Transforme un lien de partage en lien direct vers le fichier.
+    function lienDirect(url) {
+      url = (url || "").trim();
+      if (!url || url.charAt(0) === "#") return "";
+      const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]+)/);
+      if (drive) return "https://drive.google.com/uc?export=download&id=" + drive[1];
+      if (/dropbox\.com\//.test(url)) {
+        const direct = url.replace(/([?&])dl=[01]/, "$1raw=1");
+        return /[?&]raw=1/.test(direct) ? direct : direct + (direct.indexOf("?") === -1 ? "?" : "&") + "raw=1";
+      }
+      return url;
+    }
+
+    function estExterne(url) {
+      try { return new URL(url, window.location.href).origin !== window.location.origin; }
+      catch (e) { return false; }
+    }
+
+    function escapeHtml(text) {
+      return String(text == null ? "" : text)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    // Les infos des sons et les liens viennent toujours du code ;
+    // le navigateur ne garde que les compteurs, réactions et commentaires.
+    function appliquerLiens(track) {
+      const liens = LIENS[track.code] || {};
+      return Object.assign({}, track, {
+        previewUrl: lienDirect(liens.ecoute || track.previewUrl),
+        downloadUrl: lienDirect(liens.telechargement || track.downloadUrl)
+      });
+    }
+
     const STORAGE_KEY = "catalogue_musique_v1";
     const USER_REACT_KEY = "catalogue_user_react_v1";
 
     function loadTracks() {
+      let saved = [];
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (Array.isArray(saved) && saved.length > 0) return saved;
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(parsed)) saved = parsed;
       } catch (e) {}
-      return defaultTracks;
+      return defaultTracks.map(function (track) {
+        const fresh = appliquerLiens(track);
+        const old = saved.find(t => t && t.id === track.id);
+        if (!old) return fresh;
+        return Object.assign(fresh, {
+          downloads: Number(old.downloads) || 0,
+          likes: Number(old.likes) || 0,
+          hearts: Number(old.hearts) || 0,
+          comments: Array.isArray(old.comments) ? old.comments : fresh.comments
+        });
+      });
     }
 
     function loadUserReactions() {
@@ -541,8 +611,10 @@
     let openComments = {};
 
     function saveAll() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tracks));
-      localStorage.setItem(USER_REACT_KEY, JSON.stringify(userReactions));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tracks));
+        localStorage.setItem(USER_REACT_KEY, JSON.stringify(userReactions));
+      } catch (e) {}
     }
 
     function playPreview(id) {
@@ -550,19 +622,24 @@
       if (!track) return;
       const player = document.getElementById("audioPlayer");
       const label = document.getElementById("nowPlaying");
-      label.textContent = "En écoute : " + track.title + " — " + track.artist;
-      if (track.previewUrl) {
-        player.src = track.previewUrl;
-        player.play().catch(function () {});
+      if (!track.previewUrl) {
+        label.textContent = "Extrait bientôt disponible : " + track.title;
+        return;
       }
+      label.textContent = "En écoute : " + track.title + " — " + track.artist;
+      if (player.getAttribute("src") !== track.previewUrl) player.src = track.previewUrl;
+      player.play().catch(function (err) {
+        if (err && err.name === "NotAllowedError") return;
+        label.textContent = "Impossible de lire l'extrait : " + track.title;
+      });
     }
 
     function registerDownload(id) {
       const track = tracks.find(t => t.id === id);
-      if (!track) return;
+      if (!track || !track.downloadUrl) return;
       track.downloads += 1;
       saveAll();
-      render();
+      setTimeout(render, 0);
     }
 
     function toggleReaction(id, type) {
@@ -657,7 +734,7 @@
         const isOpen = !!openComments[item.id];
         const commentsHtml = item.comments.length
           ? item.comments.map(c =>
-              '<div class="comment-item"><div class="comment-head">' + c.author + '<span>' + c.date + '</span></div><div>' + c.text + '</div></div>'
+              '<div class="comment-item"><div class="comment-head">' + escapeHtml(c.author) + '<span>' + escapeHtml(c.date) + '</span></div><div>' + escapeHtml(c.text) + '</div></div>'
             ).join("")
           : '<div class="meta">Aucun commentaire pour le moment. Sois le premier à donner ton avis !</div>';
 
@@ -672,8 +749,16 @@
                 '</div>' +
               '</div>' +
               '<div class="actions">' +
-                (item.category === "Audio" ? '<button class="btn-preview" type="button" onclick="playPreview(\'' + item.id + '\')">Écouter</button>' : '') +
-                '<a class="btn-download" href="' + item.downloadUrl + '" download onclick="registerDownload(\'' + item.id + '\')">Télécharger</a>' +
+                (item.category === "Audio"
+                  ? (item.previewUrl
+                      ? '<button class="btn-preview" type="button" onclick="playPreview(\'' + item.id + '\')">Écouter</button>'
+                      : '<button class="btn-preview is-disabled" type="button" disabled title="Extrait bientôt disponible">Écouter</button>')
+                  : '') +
+                (item.downloadUrl
+                  ? '<a class="btn-download" href="' + escapeHtml(item.downloadUrl) + '" download' +
+                      (estExterne(item.downloadUrl) ? ' target="_blank" rel="noopener"' : '') +
+                      ' onclick="registerDownload(\'' + item.id + '\')">Télécharger</a>'
+                  : '<span class="btn-download is-disabled" title="Lien bientôt disponible">Bientôt dispo</span>') +
               '</div>' +
             '</div>' +
             '<div class="social-bar">' +
