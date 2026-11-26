@@ -443,6 +443,8 @@
         <button class="btn-share-site" type="button" id="copyLinkBtn">Copier le lien du site</button>
       </div>
 
+      <h1>ESPOIR DE MAMAN</h1>
+      <p>Écoute les extraits, télécharge les morceaux, laisse un like, un cœur ou un commentaire en direct dès la sortie officielle.</p>
       <h1>Catalogue Officiel des Sons</h1>
       <p>Écoute les extraits, télécharge les morceaux en haute qualité, laisse un like, un cœur ou ton avis directement sur chaque titre.</p>
 
@@ -471,11 +473,31 @@
     <div id="results" class="list"></div>
 
     <footer>
-      Plateforme Officielle • Statistiques, réactions et téléchargements directs
+      Espoir de maman • Statistiques, réactions et téléchargements directs en temps réel
     </footer>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      onValue,
+      set,
+      runTransaction,
+      push
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDJa3kEVEMQ1qd82LrwzYnFyjt92omohkc",
+      authDomain: "espoir-de-maman.firebaseapp.com",
+      databaseURL: "https://espoir-de-maman-default-rtdb.firebaseio.com",
+      projectId: "espoir-de-maman",
+      storageBucket: "espoir-de-maman.firebasestorage.app",
+      messagingSenderId: "777886663541",
+      appId: "1:777886663541:web:7a83913b0eede0a5b6893c"
+    };
+
     const defaultTracks = [
       {
         id: "son-1",
@@ -526,87 +548,8 @@
       }
     ];
 
-    // =====================================================================
-    // LIENS D'ÉCOUTE ET DE TÉLÉCHARGEMENT
-    // Colle ici les liens de chaque son, repéré par son code (01, 02, 03...).
-    //   ecoute         : lien de l'extrait joué par le bouton « Écouter »
-    //   telechargement : lien du fichier pour le bouton « Télécharger »
-    // Laisse "" tant que le lien n'est pas prêt : le bouton s'affiche alors
-    // « Bientôt dispo » au lieu d'un lien cassé.
-    // Conseil : le plus fiable est de mettre les fichiers dans un dossier
-    // audio/ du dépôt et d'écrire par ex. "audio/espoir-de-maman.mp3".
-    // Les liens Google Drive (…/file/d/ID/view) et Dropbox (?dl=0) sont
-    // convertis automatiquement en liens directs.
-    // =====================================================================
-    const LIENS = {
-      "01": { ecoute: "", telechargement: "" },
-      "02": { ecoute: "", telechargement: "" },
-      "03": { ecoute: "", telechargement: "" }
-    };
-
-    // Transforme un lien de partage en lien direct vers le fichier.
-    function lienDirect(url) {
-      url = (url || "").trim();
-      if (!url || url.charAt(0) === "#") return "";
-      const drive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]+)/);
-      if (drive) return "https://drive.google.com/uc?export=download&id=" + drive[1];
-      if (/dropbox\.com\//.test(url)) {
-        const direct = url.replace(/([?&])dl=[01]/, "$1raw=1");
-        return /[?&]raw=1/.test(direct) ? direct : direct + (direct.indexOf("?") === -1 ? "?" : "&") + "raw=1";
-      }
-      return url;
-    }
-
-    function estExterne(url) {
-      try { return new URL(url, window.location.href).origin !== window.location.origin; }
-      catch (e) { return false; }
-    }
-
-    // Nom propre du fichier téléchargé, ex. « Espoir de maman.mp3 »
-    // (pris en compte par le navigateur pour les fichiers du dépôt).
-    function nomFichier(item) {
-      const ext = (item.downloadUrl.split(/[?#]/)[0].match(/\.(mp3|wav|flac|m4a|aac|ogg|zip)$/i) || [])[1];
-      if (!ext) return "";
-      return item.title.replace(/[\\/:*?"<>|]/g, "").trim() + "." + ext.toLowerCase();
-    }
-
-    function escapeHtml(text) {
-      return String(text == null ? "" : text)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    }
-
-    // Les infos des sons et les liens viennent toujours du code ;
-    // le navigateur ne garde que les compteurs, réactions et commentaires.
-    function appliquerLiens(track) {
-      const liens = LIENS[track.code] || {};
-      return Object.assign({}, track, {
-        previewUrl: lienDirect(liens.ecoute || track.previewUrl),
-        downloadUrl: lienDirect(liens.telechargement || track.downloadUrl)
-      });
-    }
-
-    const STORAGE_KEY = "catalogue_musique_v1";
+    const LOCAL_TRACKS_KEY = "catalogue_musique_v1";
     const USER_REACT_KEY = "catalogue_user_react_v1";
-
-    function loadTracks() {
-      let saved = [];
-      try {
-        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (Array.isArray(parsed)) saved = parsed;
-      } catch (e) {}
-      return defaultTracks.map(function (track) {
-        const fresh = appliquerLiens(track);
-        const old = saved.find(t => t && t.id === track.id);
-        if (!old) return fresh;
-        return Object.assign(fresh, {
-          downloads: Number(old.downloads) || 0,
-          likes: Number(old.likes) || 0,
-          hearts: Number(old.hearts) || 0,
-          comments: Array.isArray(old.comments) ? old.comments : fresh.comments
-        });
-      });
-    }
 
     function loadUserReactions() {
       try {
@@ -616,18 +559,82 @@
       }
     }
 
-    let tracks = loadTracks();
+    function saveUserReactions() {
+      localStorage.setItem(USER_REACT_KEY, JSON.stringify(userReactions));
+    }
+
+    function loadLocalTracks() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(LOCAL_TRACKS_KEY));
+        if (Array.isArray(saved) && saved.length > 0) return saved;
+      } catch (e) {}
+      return defaultTracks;
+    }
+
+    function saveLocalTracks() {
+      localStorage.setItem(LOCAL_TRACKS_KEY, JSON.stringify(tracks));
+    }
+
+    let tracks = loadLocalTracks();
     let userReactions = loadUserReactions();
     let openComments = {};
 
-    function saveAll() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tracks));
-        localStorage.setItem(USER_REACT_KEY, JSON.stringify(userReactions));
-      } catch (e) {}
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const tracksRef = ref(db, "tracks");
+
+    function mergeWithDefaults(remoteData) {
+      return defaultTracks.map(def => {
+        const rem = remoteData && remoteData[def.id] ? remoteData[def.id] : {};
+        let commentsList = [];
+        if (Array.isArray(rem.comments)) {
+          commentsList = rem.comments.slice();
+        } else if (rem.comments && typeof rem.comments === "object") {
+          commentsList = Object.values(rem.comments);
+        }
+        commentsList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        return {
+          ...def,
+          title: rem.title || def.title,
+          artist: rem.artist || def.artist,
+          category: rem.category || def.category,
+          format: rem.format || def.format,
+          size: rem.size || def.size,
+          previewUrl: typeof rem.previewUrl === "string" ? rem.previewUrl : def.previewUrl,
+          downloadUrl: typeof rem.downloadUrl === "string" ? rem.downloadUrl : def.downloadUrl,
+          downloads: Number(rem.downloads) || 0,
+          likes: Number(rem.likes) || 0,
+          hearts: Number(rem.hearts) || 0,
+          comments: commentsList
+        };
+      });
     }
 
-    function playPreview(id) {
+    onValue(tracksRef, (snapshot) => {
+      const val = snapshot.val();
+      if (!val) {
+        const initialObj = {};
+        defaultTracks.forEach(t => {
+          initialObj[t.id] = {
+            downloads: 0,
+            likes: 0,
+            hearts: 0,
+            comments: {}
+          };
+        });
+        set(tracksRef, initialObj).catch(() => {});
+        tracks = defaultTracks.slice();
+      } else {
+        tracks = mergeWithDefaults(val);
+      }
+      saveLocalTracks();
+      render();
+    }, () => {
+      render();
+    });
+
+    window.playPreview = function (id) {
       const track = tracks.find(t => t.id === id);
       if (!track) return;
       const player = document.getElementById("audioPlayer");
@@ -637,43 +644,54 @@
         return;
       }
       label.textContent = "En écoute : " + track.title + " — " + track.artist;
-      if (player.getAttribute("src") !== track.previewUrl) player.src = track.previewUrl;
-      player.play().catch(function (err) {
-        if (err && err.name === "NotAllowedError") return;
-        label.textContent = "Impossible de lire l'extrait : " + track.title;
-      });
-    }
+      player.src = track.previewUrl;
+      player.play().catch(function () {});
+    };
 
-    function registerDownload(id) {
+    window.handleDownload = function (event, id) {
       const track = tracks.find(t => t.id === id);
-      if (!track || !track.downloadUrl) return;
-      track.downloads += 1;
-      saveAll();
-      setTimeout(render, 0);
-    }
+      if (!track) return;
+      if (!track.downloadUrl || track.downloadUrl.startsWith("#")) {
+        event.preventDefault();
+        alert("Le téléchargement de « " + track.title + " » sera disponible dès la sortie officielle vendredi.");
+        return;
+      }
+      const dlRef = ref(db, "tracks/" + id + "/downloads");
+      runTransaction(dlRef, (current) => (Number(current) || 0) + 1).catch(() => {
+        track.downloads += 1;
+        saveLocalTracks();
+        render();
+      });
+    };
 
-    function toggleReaction(id, type) {
+    window.toggleReaction = function (id, type) {
       const track = tracks.find(t => t.id === id);
       if (!track) return;
       if (!userReactions[id]) userReactions[id] = { like: false, heart: false };
 
+      let delta = 0;
       if (type === "like") {
         userReactions[id].like = !userReactions[id].like;
-        track.likes += userReactions[id].like ? 1 : -1;
+        delta = userReactions[id].like ? 1 : -1;
+        const targetRef = ref(db, "tracks/" + id + "/likes");
+        runTransaction(targetRef, (current) => Math.max(0, (Number(current) || 0) + delta)).catch(() => {});
       } else if (type === "heart") {
         userReactions[id].heart = !userReactions[id].heart;
-        track.hearts += userReactions[id].heart ? 1 : -1;
+        delta = userReactions[id].heart ? 1 : -1;
+        const targetRef = ref(db, "tracks/" + id + "/hearts");
+        runTransaction(targetRef, (current) => Math.max(0, (Number(current) || 0) + delta)).catch(() => {});
       }
-      saveAll();
-      render();
-    }
 
-    function toggleCommentBox(id) {
+      saveUserReactions();
+      render();
+    };
+
+    window.toggleCommentBox = function (id) {
       openComments[id] = !openComments[id];
       render();
-    }
+    };
 
-    function addComment(event, id) {
+    window.addComment = function (event, id) {
       event.preventDefault();
       const form = event.target;
       const nameInput = form.querySelector(".name-input");
@@ -681,25 +699,41 @@
       const text = msgInput.value.trim();
       if (!text) return;
 
-      const track = tracks.find(t => t.id === id);
-      if (!track) return;
-
-      track.comments.unshift({
-        author: nameInput.value.trim() || "Auditeur",
+      const author = nameInput.value.trim() || "Auditeur";
+      const newComment = {
+        author: author,
         date: "À l'instant",
-        text: text
+        text: text,
+        timestamp: Date.now()
+      };
+
+      const commentsRef = ref(db, "tracks/" + id + "/comments");
+      push(commentsRef, newComment).catch(() => {
+        const track = tracks.find(t => t.id === id);
+        if (track) {
+          track.comments.unshift(newComment);
+          saveLocalTracks();
+          render();
+        }
       });
 
+      msgInput.value = "";
       openComments[id] = true;
-      saveAll();
-      render();
-    }
+    };
 
-    function shareTrack(title) {
+    window.shareTrack = function (title) {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(window.location.href).catch(function () {});
       }
       alert("Lien copié pour partager : " + title);
+    };
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
     function renderStats() {
@@ -744,7 +778,7 @@
         const isOpen = !!openComments[item.id];
         const commentsHtml = item.comments.length
           ? item.comments.map(c =>
-              '<div class="comment-item"><div class="comment-head">' + escapeHtml(c.author) + '<span>' + escapeHtml(c.date) + '</span></div><div>' + escapeHtml(c.text) + '</div></div>'
+              '<div class="comment-item"><div class="comment-head">' + escapeHtml(c.author || "Auditeur") + '<span>' + escapeHtml(c.date || "") + '</span></div><div>' + escapeHtml(c.text || "") + '</div></div>'
             ).join("")
           : '<div class="meta">Aucun commentaire pour le moment. Sois le premier à donner ton avis !</div>';
 
@@ -752,23 +786,15 @@
           '<article class="item">' +
             '<div class="item-main">' +
               '<div class="track-left">' +
-                '<div class="cover">' + item.code + '</div>' +
+                '<div class="cover">' + escapeHtml(item.code) + '</div>' +
                 '<div>' +
-                  '<div class="title-row"><strong>' + item.title + '</strong><span class="tag">' + item.category + '</span></div>' +
-                  '<div class="meta">' + item.artist + ' • ' + item.format + ' • ' + item.size + '</div>' +
+                  '<div class="title-row"><strong>' + escapeHtml(item.title) + '</strong><span class="tag">' + escapeHtml(item.category) + '</span></div>' +
+                  '<div class="meta">' + escapeHtml(item.artist) + ' • ' + escapeHtml(item.format) + ' • ' + escapeHtml(item.size) + '</div>' +
                 '</div>' +
               '</div>' +
               '<div class="actions">' +
-                (item.category === "Audio"
-                  ? (item.previewUrl
-                      ? '<button class="btn-preview" type="button" onclick="playPreview(\'' + item.id + '\')">Écouter</button>'
-                      : '<button class="btn-preview is-disabled" type="button" disabled title="Extrait bientôt disponible">Écouter</button>')
-                  : '') +
-                (item.downloadUrl
-                  ? '<a class="btn-download" href="' + escapeHtml(item.downloadUrl) + '" download="' + escapeHtml(nomFichier(item)) + '"' +
-                      (estExterne(item.downloadUrl) ? ' target="_blank" rel="noopener"' : '') +
-                      ' onclick="registerDownload(\'' + item.id + '\')">Télécharger</a>'
-                  : '<span class="btn-download is-disabled" title="Lien bientôt disponible">Bientôt dispo</span>') +
+                (item.category === "Audio" ? '<button class="btn-preview" type="button" onclick="playPreview(\'' + item.id + '\')">Écouter</button>' : '') +
+                '<a class="btn-download" href="' + escapeHtml(item.downloadUrl) + '" download onclick="handleDownload(event, \'' + item.id + '\')">Télécharger</a>' +
               '</div>' +
             '</div>' +
             '<div class="social-bar">' +
