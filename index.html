@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sortie Officielle — Plateforme Audio & Téléchargement</title>
+  <title>Espoir de maman — Plateforme Audio & Téléchargement</title>
   <style>
     :root {
       --bg: #07090e;
@@ -418,6 +418,64 @@
       border: 1px solid var(--border);
     }
 
+    @media (max-width: 600px) {
+      body {
+        padding: 0.85rem 0.75rem 3rem;
+      }
+
+      .hero {
+        padding: 1.1rem 1rem;
+        border-radius: 16px;
+        margin-bottom: 1rem;
+      }
+
+      .badge {
+        font-size: 0.68rem;
+        padding: 0.28rem 0.65rem;
+      }
+
+      .hero h1 {
+        font-size: 1.55rem;
+      }
+
+      .hero p {
+        font-size: 0.88rem;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+        margin-top: 1rem;
+      }
+
+      .stat-card {
+        padding: 0.65rem 0.75rem;
+      }
+
+      .stat-value {
+        font-size: 1.1rem;
+      }
+
+      .player-box {
+        padding: 0.75rem 0.85rem;
+        margin-top: 0.9rem;
+      }
+
+      .item {
+        padding: 1rem;
+      }
+
+      .actions {
+        width: 100%;
+      }
+
+      .btn-preview,
+      .btn-download {
+        flex: 1;
+        text-align: center;
+      }
+    }
+
     footer {
       margin-top: 2.5rem;
       text-align: center;
@@ -430,12 +488,12 @@
   <div class="container">
     <section class="hero">
       <div class="top-bar">
-        <span class="badge">Sortie Officielle • Téléchargement Direct</span>
+        <span class="badge">Sortie Vendredi • Espoir de maman</span>
         <button class="btn-share-site" type="button" id="copyLinkBtn">Copier le lien du site</button>
       </div>
 
-      <h1> ESPOIR DE MAMAN</h1>
-      <p>Écoute les extraits, télécharge les morceaux en haute qualité, laisse un like, un cœur ou ton avis directement sur chaque titre.</p>
+      <h1>ESPOIR DE MAMAN</h1>
+      <p>Écoute les extraits, télécharge les morceaux, laisse un like, un cœur ou un commentaire dès la sortie officielle.</p>
 
       <div class="stats-grid" id="globalStats"></div>
 
@@ -462,57 +520,55 @@
     <div id="results" class="list"></div>
 
     <footer>
-      Plateforme Officielle • Statistiques, réactions et téléchargements directs
+      Espoir de maman • Statistiques, réactions et téléchargements directs
     </footer>
   </div>
 
   <script>
     const defaultTracks = [
       {
-        id: "son-1",
+        id: "espoir-de-maman-main",
         code: "01",
-        title: "Titre Principal (Version Studio)",
-        artist: "Artiste Officiel",
+        title: "Espoir de maman",
+        artist: "Artiste à préciser",
         category: "Audio",
         format: "MP3 • 320 kbps",
-        size: "8.4 Mo",
+        size: "À confirmer",
         previewUrl: "",
         downloadUrl: "#lien-telechargement-1",
-        downloads: 142,
-        likes: 48,
-        hearts: 31,
-        comments: [
-          { author: "Kévin", date: "Aujourd'hui", text: "L'instru et le refrain passent super bien !" }
-        ]
-      },
-      {
-        id: "son-2",
-        code: "02",
-        title: "Version Instrumentale",
-        artist: "Artiste Officiel",
-        category: "Audio",
-        format: "MP3 • 320 kbps",
-        size: "7.9 Mo",
-        previewUrl: "",
-        downloadUrl: "#lien-telechargement-2",
-        downloads: 87,
-        likes: 29,
-        hearts: 19,
+        downloads: 0,
+        likes: 0,
+        hearts: 0,
         comments: []
       },
       {
-        id: "son-3",
+        id: "espoir-de-maman-instru",
+        code: "02",
+        title: "Espoir de maman (Version Instrumentale)",
+        artist: "Artiste à préciser",
+        category: "Audio",
+        format: "MP3 / WAV",
+        size: "À confirmer",
+        previewUrl: "",
+        downloadUrl: "#lien-telechargement-2",
+        downloads: 0,
+        likes: 0,
+        hearts: 0,
+        comments: []
+      },
+      {
+        id: "espoir-de-maman-pack",
         code: "03",
         title: "Pack Visuel, Pochette & Paroles",
-        artist: "Artiste Officiel",
+        artist: "Artiste à préciser",
         category: "Bonus",
         format: "ZIP",
-        size: "5.1 Mo",
+        size: "À confirmer",
         previewUrl: "",
         downloadUrl: "#lien-telechargement-3",
-        downloads: 64,
-        likes: 22,
-        hearts: 15,
+        downloads: 0,
+        likes: 0,
+        hearts: 0,
         comments: []
       }
     ];
@@ -550,16 +606,23 @@
       if (!track) return;
       const player = document.getElementById("audioPlayer");
       const label = document.getElementById("nowPlaying");
-      label.textContent = "En écoute : " + track.title + " — " + track.artist;
-      if (track.previewUrl) {
-        player.src = track.previewUrl;
-        player.play().catch(function () {});
+      if (!track.previewUrl) {
+        label.textContent = "Aperçu indisponible pour le moment : " + track.title + " (sortie vendredi)";
+        return;
       }
+      label.textContent = "En écoute : " + track.title + " — " + track.artist;
+      player.src = track.previewUrl;
+      player.play().catch(function () {});
     }
 
-    function registerDownload(id) {
+    function handleDownload(event, id) {
       const track = tracks.find(t => t.id === id);
       if (!track) return;
+      if (!track.downloadUrl || track.downloadUrl.startsWith("#")) {
+        event.preventDefault();
+        alert("Le téléchargement de « " + track.title + " » sera disponible dès la sortie officielle vendredi.");
+        return;
+      }
       track.downloads += 1;
       saveAll();
       render();
@@ -673,7 +736,7 @@
               '</div>' +
               '<div class="actions">' +
                 (item.category === "Audio" ? '<button class="btn-preview" type="button" onclick="playPreview(\'' + item.id + '\')">Écouter</button>' : '') +
-                '<a class="btn-download" href="' + item.downloadUrl + '" download onclick="registerDownload(\'' + item.id + '\')">Télécharger</a>' +
+                '<a class="btn-download" href="' + item.downloadUrl + '" download onclick="handleDownload(event, \'' + item.id + '\')">Télécharger</a>' +
               '</div>' +
             '</div>' +
             '<div class="social-bar">' +
